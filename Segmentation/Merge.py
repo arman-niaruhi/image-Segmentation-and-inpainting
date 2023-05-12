@@ -8,7 +8,7 @@ import qimage2ndarray
 from scipy.sparse import spdiags
 from scipy.sparse import coo_matrix
 from scipy.sparse import linalg, kron, identity, vstack
-from scipy.ndimage.morphology import binary_dilation 
+
 
 
 
