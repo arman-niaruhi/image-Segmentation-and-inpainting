@@ -10,8 +10,9 @@ from Network import Net
 import torch.nn as nn
 import torch
 import cv2
+import time
 
-
+start = None
 class Scrible(QLabel):
     def __init__(self,path):
         super().__init__()
@@ -79,8 +80,8 @@ class Scrible(QLabel):
     def trasform(self):
         rgb_im = Image.open(self.path).convert('RGB')
         imageOrg = np.array(rgb_im.resize([700,500])) / 255
-        rgb_im1 = Image.open("Background1.png").convert('RGB')
-        imageOrg1 = np.array(rgb_im1.resize([700,500])) / 255
+        # rgb_im1 = Image.open(".Background1.png").convert('RGB')
+        imageOrg1 = np.ones([500,700,1])
         
         mask = qimage2ndarray.recarray_view(self.imageDraw)
         y , x = mask.shape
@@ -153,6 +154,14 @@ class Scrible(QLabel):
         imageMaskFinal2 = (imageMaskFinal >= 0.5)
         imageMaskFinal1 = np.reshape(imageMaskFinal1, (ny,nx,1))
         imageMaskFinal2 = np.reshape(imageMaskFinal2, (ny,nx,1))
+
+
+        # save the image
+        cv2.imwrite("back.png", (imageMaskFinal2 * 1)*255)
+
+
+
+
         manipulatedImg = imageOrg1.copy()
         manipulatedImg = imageOrg*imageMaskFinal1 + (1-imageMaskFinal1)*imageOrg1
         image_masked1 = qimage2ndarray.array2qimage(manipulatedImg,normalize = True)
@@ -178,30 +187,43 @@ class Scrible(QLabel):
     def train (self,x_train, y_train): # Batchsize??
         d_in = x_train.shape[1]
         d_out = y_train.shape[1] 
-        d_hidden1 = 15#40
+        d_hidden1 = 30#40
         d_hidden2 = 20#50
+        d_hidden3 = 30
 
-        net = Net(d_in, d_hidden1, d_hidden2 ,d_out)
+        net = Net(d_in, d_hidden1, d_hidden2, d_hidden3, d_out)
 
         x_train_torch = torch.from_numpy(x_train).float()
         y_train_torch = torch.from_numpy(y_train).float()
 
         lossFunction = nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.Adam(net.parameters(), lr= 0.01)
-        #optimizer = torch.optim.SGD(net.parameters(), lr= 0.1, momentum=0.9)
+        optimizer = torch.optim.Adam(net.parameters(), lr= 1e-2)
+        # optimizer = torch.optim.SGD(net.parameters(), lr= 1, momentum=0.9)
     
-        maxIter = 1000
+
+        maxIter = 10000
+        tol = 1e-4
+        Losses = []
+        i = 0
+        start = time.time()
         for i in range (maxIter):
+            # Batch GD
             random_idx = torch.randint(0,x_train_torch.shape[0],(50,))
             prediction = net(x_train_torch[random_idx])
             loss = lossFunction(prediction, y_train_torch[random_idx])
 
-            optimizer.zero_grad() #gradienten auf 0 setzen
-            loss.backward()       #kettenregel für Gradienten
-            optimizer.step()      #ein Schritt bessere Parameter machen
-
+            optimizer.zero_grad() 
+            loss.backward()       
+            optimizer.step()      
+            Losses.append(np.round(loss.detach().numpy(),4))
             if np.mod(i,100)== 0:
                 print(i,loss.item())
-
+                
+            if loss < tol:
+                break
+        print(time.time() - start)
+        plt.plot(range(1, i+2), Losses)
+        plt.ylabel('Error')
+        plt.xlabel('number of epochs')
+        plt.savefig('fig.png')
         return net
-
